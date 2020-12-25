@@ -1,5 +1,5 @@
 --- 
-title: "R code demo for fast computing algorithm"
+title: "R code demo for Chapter 3"
 author: "Shiqiang Jin and Gyuhyeong Goh"
 date: "`r Sys.Date()`"
 site: bookdown::bookdown_site
@@ -7,7 +7,7 @@ documentclass: book
 bibliography: [book.bib, packages.bib]
 biblio-style: apalike
 link-citations: yes
-description: "This is a supplymentary material about an R domo code for computing marginal likelihood distribution using fasting computing strategy and for-loop method."
+description: "This is a supplymentary material in Chapter 3 about an R domo code for computing marginal likelihood distribution using fasting computing strategy and for-loop method."
 ---
 \newcommand{\uA}{{\bf A}}
 \newcommand{\ua}{{\bf a}}
@@ -50,9 +50,9 @@ description: "This is a supplymentary material about an R domo code for computin
 \newcommand{\uxi}{{\boldsymbol \xi}}
 \newcommand{\nbd}{{\text{nbd}}}
 
-# R code demo for fast computing algorithm
+# R code demo for fast computing algorithm {#chapter3}
 
-This is a supplymentary material about an R domo code for computing marginal likelihood distribution using fasting computing strategy and for-loop method
+This is a supplymentary material in Chapter 3 about an R domo code for computing marginal likelihood distribution using fasting computing strategy and for-loop method
 
 ## Review of Appendix B.1 Calculation
 For any $i\notin\hat\bg$, $|\hat\bg\cup\{i\}|=k+1$, hence $s(\uY|\hat\bg\cup\{i\})$ in Eq.(3) can be expressed as
@@ -64,7 +64,7 @@ s(\uY|\hat\bg\cup\{i\})={\zeta}^{-\frac{m(k+1)}{2}}|\uX_{\hat\bg\cup\{i\}}^{\T}\
 Using technique fast computing algorithm, we have
 
 \begin{eqnarray}
-\us_+(\hat\bg) &=& c_{\hat\bg}^+\times \left(\zeta^{-1}\1_p+\diag(\uX^{\T}\uH_{\hat{\bg}}\uX)\right)^{-m/2}\boldsymbol{\cdot}\\
+\us_+(\hat\bg) &=& c_{\hat\bg}^+\times \left(\zeta^{-1}\1_p+\diag(\uX^{\T}\uH_{\hat{\bg}}\uX)\right)^{-\frac{m}{2}}\boldsymbol{\cdot}\\
 &&\left[\1_p - \frac{\diag(\uX^{\T}\uH_{\hat{\bg}}\uY(\uY^{\T}\uH_{\hat{\bg}}\uY+\uPsi)^{-1}\uY^{\T}\uH_{\hat{\bg}}\uX)}{\zeta^{-1}\1_p+\diag(\uX^{\T}\uH_{\hat{\bg}}\uX)}\right]^{-\frac{n+\nu}{2}}(\#eq:2)
 \end{eqnarray}
 where $\ua^x = (a_1^x,\ldots,a_p^x)$, $\ua\boldsymbol{\cdot}\ub = (a_1b_1,\ldots,a_pb_p)$, $\ua/\ub = (a_1/b_1,\ldots,a_p/b_p)$ for generic vectors $\ua$ and $\ub$, and $c_{\hat\bg}^+= {\zeta}^{-\frac{m(k+1)}{2}}|\uX_{\hat\bg}^{\T}\uX_{\hat\bg}+\zeta^{-1}\uI_{k}|^{-\frac{m}{2}}\left|\uY^{\T}\uH_{\hat{\bg}}\uY+\uPsi\right|^{-\frac{n+\nu}{2}}$ is a constant with respect to $i\notin \hat\bg$.
@@ -129,37 +129,36 @@ To better understand R code and corresponding notations, we list a cross-referen
 ```{r}
 # For loop method
 I_n <- diag(1, n)  # n-dimension identity matrix 
-I_k1 <- diag(1, k + 1)
+I_k1 <- diag(1, k + 1) # (k+1)-dimension identity matrix
 p_r <- setdiff(seq(1, p), r)  # p-k vector
 log.s.plus1 <- rep(NA, length(p_r))
 j <- 1
 for (i in p_r) {
-    rUi <- sort(c(r, i))  # add one index from p_r
-    X.rUi <- X[, rUi]  # model in addition neighbor
-    XtX <- crossprod(X.rUi) + 1/zeta * I_k1
-    H.rUi <- I_n - X.rUi %*% solve(XtX) %*% t(X.rUi)
-    # logarithm of Eq (1.1)
-    log.s.Y.rUi <- -m * (k + 1)/2 * log(zeta) - m/2 * log(det(XtX)) - (n + v)/2 * log(det(t(Y) %*% H.rUi %*% Y + Psi))
-    log.s.plus1[j] <- log.s.Y.rUi
-    j <- j + 1
+  rUi <- sort(c(r, i))  # a model in addition neighbor
+  X.rUi <- X[, rUi]  # n by k+1 submatrix of X
+  XtX <- crossprod(X.rUi) + 1/zeta * I_k1
+  H.rUi <- I_n - X.rUi %*% solve(XtX) %*% t(X.rUi)
+  # logarithm of Eq (1.1) for a model in additional neighbor
+  log.s.Y.rUi <- -m * (k + 1)/2 * log(zeta) - m/2 * log(det(XtX)) - (n + v)/2 * log(det(t(Y) %*% H.rUi %*% Y + Psi))
+  log.s.plus1[j] <- log.s.Y.rUi
+  j <- j + 1
 }
 
 # Proposed Method
 I_k <- diag(1, k)  # k-dimension identity matrix 
-X.r <- X[, r]
+X.r <- X[, r] # n by k submatrix of X
 X_r <- X[, p_r]  # n by p-k m sub-matrix of X
 H.r <- I_n - X.r %*% solve(crossprod(X.r) + 1/zeta * I_k) %*% t(X.r)  # n by n matrix
 d <- 1/zeta + colSums(H.r %*% X_r * X_r)  # p-k dimension vector
 YHX_r <- t(Y) %*% H.r %*% X_r  # p-k by m matrix
 YHY_1 <- solve(t(Y) %*% H.r %*% Y + Psi)  # m by m matrix
 u <- colSums(YHY_1 %*% YHX_r * YHX_r)  # p-k dimension vector
-
-# logarithm of Eq (1.3)
+# last two items of logarithm of Eq (1.3)
 log.s.plus1.approx <- -m/2 * log(d) - (n + v)/2 * log(1 - u/d)
 # log(c)
 log.c <- -0.5 * m * (k + 1) * log(zeta) - 0.5 * m * log(det(crossprod(X.r) + 
     1/zeta * I_k)) - (n + v)/2 * log(det(t(Y) %*% H.r %*% Y + Psi))
-log.s.plus2 <- log.c + log.s.plus1.approx  # logarithm of Eq (1.2)
+log.s.plus2 <- log.c + log.s.plus1.approx  # logarithm of Eq (1.3)
 ```
 
 I compute mean absolute percentage error $\text{MAPE} = \frac{1}{n}\Sigma_{t=1}^n|\frac{A_t-F_t}{A_t}|$ to measure the accuracy of the fast computing algorithm. 
@@ -176,36 +175,42 @@ From the plot and MAPE, $\log(\us(\uY|\nbd_+(\hat\bg)))$ computed by \@ref(eq:1)
 ## Time cost comparison for proposed method and for loop method
 
 Note that when doing the model selection, as $\log(c_{\hat\bg}^+)$ is a constant with respect to $i\notin \hat\bg$, in R code I only compute `log.s.plus2.approx`. I use R package `microbenchmark` to do the simulation and the default replication is 100 times. 
-```{r}
+```{r, eval = F}
 library(microbenchmark)
 timecost <- microbenchmark("for_loop" = {
   log.s.plus1 <- rep(NA, length(p_r))
   j <- 1
   for (i in p_r) {
-    rUi <- sort(c(r, i))  # add one index from p_r
-    X.rUi <- X[, rUi]  # model in addition neighbor
+    rUi <- sort(c(r, i))  # a model in addition neighbor
+    X.rUi <- X[, rUi]  # n by k+1 submatrix of X
     XtX <- crossprod(X.rUi) + 1/zeta * I_k1
     H.rUi <- I_n - X.rUi %*% solve(XtX) %*% t(X.rUi)
-    # logarithm of Eq (1.1)
-    log.s.Y.rUi <- -m * (k + 1)/2 * log(zeta) - 
-      m/2 * log(det(XtX)) - (n + v)/2 * log(det(t(Y) %*% H.rUi %*% Y + Psi))
+    # logarithm of Eq (1.1) for a model in additional neighbor
+    log.s.Y.rUi <- -m * (k + 1)/2 * log(zeta) - m/2 * log(det(XtX)) - (n + v)/2 * log(det(t(Y) %*% H.rUi %*% Y + Psi))
     log.s.plus1[j] <- log.s.Y.rUi
     j <- j + 1
   }
 },
 "Proposed" = {
-  X.r <- X[, r]
-  I_k <- diag(1, k)  # k-dimension identity matrix 
-  X_r <- X[, p_r]  # n by p-k m sub-matrix of X
-  H.r <- I_n - X.r %*% solve(crossprod(X.r) + 1/zeta * I_k) %*% t(X.r)  # n by n matrix
-  d <- 1/zeta + colSums(H.r %*% X_r * X_r)  # p-k dimension vector
-  YHX <- t(Y) %*% H.r %*% X_r  # p-k by m matrix
-  YHY_1 <- solve(t(Y) %*% H.r %*% Y + Psi)  # m by m matrix
-  u <- colSums(YHY_1 %*% YHX * YHX)  # p-k dimension vector
-  # logarithm of Eq (3)
-  log.s.plus2.approx <- -m/2 * log(d) - (n + v)/2 * log(1 - u/d)
+I_k <- diag(1, k)  # k-dimension identity matrix 
+X.r <- X[, r] # n by k submatrix of X
+X_r <- X[, p_r]  # n by p-k m sub-matrix of X
+H.r <- I_n - X.r %*% solve(crossprod(X.r) + 1/zeta * I_k) %*% t(X.r)  # n by n matrix
+d <- 1/zeta + colSums(H.r %*% X_r * X_r)  # p-k dimension vector
+YHX_r <- t(Y) %*% H.r %*% X_r  # p-k by m matrix
+YHY_1 <- solve(t(Y) %*% H.r %*% Y + Psi)  # m by m matrix
+u <- colSums(YHY_1 %*% YHX_r * YHX_r)  # p-k dimension vector
+# last two items of logarithm of Eq (1.3)
+log.s.plus1.approx <- -m/2 * log(d) - (n + v)/2 * log(1 - u/d)
 }
 ) 
 timecost
 ```
-Looking at the median of time cost, the proposed method is about 100 times faster than the for-loop method. 
+
+```{r, echo = F}
+load("timecost-Pro2.RData")
+timecost
+```
+Looking at the median of time cost, the proposed method is about 120 times faster than the for-loop method. 
+
+Please continue to read R code for [Chapter 4](#chapter4).

@@ -1,0 +1,264 @@
+--- 
+title: "An R code demo for Chapter 4"
+author: "Shiqiang Jin and Gyuhyeong Goh"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  bookdown::pdf_book:
+    citation_package: biblatex
+  pdf_document:
+    citation_package: natbib
+description: "This is a supplymentary material about an R domo code for computing marginal likelihood distribution using fasting computing strategy and for-loop method."
+documentclass: book
+link-citations: yes
+bibliography: packages.bib
+site: bookdown::bookdown_site
+biblio-style: apalike
+---
+\newcommand{\uA}{{\bf A}}
+\newcommand{\ua}{{\bf a}}
+\newcommand{\uB}{{\bf B}}
+\newcommand{\ub}{{\bf b}}
+\newcommand{\uC}{{\bf C}}
+\newcommand{\uc}{{\bf c}}
+\newcommand{\ud}{{\bf d}}
+\newcommand{\ue}{{\bf e}}
+\newcommand{\uE}{{\bf E}}
+\newcommand{\uH}{{\bf H}}
+\newcommand{\uI}{{\bf I}}
+\newcommand{\uJ}{{\bf J}}
+\newcommand{\uK}{{\bf K}}
+\newcommand{\bP}{{\bf P}}
+\newcommand{\uQ}{{\bf Q}}
+\newcommand{\uv}{{\bf v}}
+\newcommand{\uV}{{\bf V}}
+\newcommand{\us}{{\bf s}}
+\newcommand{\T}{{ \mathrm{\scriptscriptstyle T} }}
+\newcommand{\uU}{{\bf U}}
+\newcommand{\uu}{{\bf u}}
+\newcommand{\uX}{{\bf X}}
+\newcommand{\ux}{{\bf x}}
+\newcommand{\uY}{{\bf Y}}
+\newcommand{\uy}{{\bf y}}
+
+<!-- greek letters, numbers and etc.-->
+
+\newcommand{\0}{{\bf 0}}
+\newcommand{\1}{{\boldsymbol 1}}
+\newcommand{\ualpha}{{\boldsymbol \alpha}}
+\newcommand{\ubeta}{{\boldsymbol \beta}}
+\newcommand{\diag}{{\rm diag}}
+\newcommand{\uepsilon}{{\boldsymbol \epsilon}}
+\newcommand{\ueta}{{\boldsymbol \eta}}
+\newcommand{\utheta}{{\boldsymbol \theta}}
+\newcommand{\uTheta}{{\boldsymbol \Theta}}
+\newcommand{\bg}{{\boldsymbol \gamma}}
+\newcommand{\bOmega}{{\boldsymbol\Omega}}
+\newcommand{\uPsi}{{\boldsymbol \Psi}}
+\newcommand{\uSigma}{{\boldsymbol \Sigma}}
+\newcommand{\uxi}{{\boldsymbol \xi}}
+\newcommand{\nbd}{{\text{nbd}}}
+
+# The proposed method applied in Bayesian logistic regression model {#chapter4}
+
+This is a supplymentary material in Chapter 4 about an R domo code for computing marginal likelihood function using proposed method and for-loop method.
+
+## Model setting 
+
+Suppose $\uy\in\mathcal{R}^n$ are independent binary outcomes from Bernoulli distribution. $\uX = (\ux_1,\ux_2,\ldots,\ux_n)^{\T}\in\mathcal{R}^{n\times p}$ is a covariate matirx. Given model $\bg$, the likelihood function of logistic regression model is $f(\uy|\utheta_\bg,\bg) = \prod_{i=1}^{n}p_i^{y_i}(1-p_i)^{(1-y_i)}$, where $p_i = \frac{\exp(\ux_{i\bg}^{\T}\utheta_\bg)}{1+\exp(\ux_{i\bg}^{\T}\utheta_\bg)}$. Consider the prior distribution for $\theta_\bg$ is $\pi(\utheta_\bg|\bg) \sim \mathcal{N}(\0, \lambda\uI_{|\bg|})$ with the hyperparameter $\lambda$. Then the marginal posterior function given $\bg$, $\pi(\utheta_\bg|\uy,\bg)$, can be proportional to
+\begin{eqnarray}
+	f(\uy|\utheta_\bg,\bg)\pi(\utheta_\bg|\bg) = && \prod_{i=1}^n \left[\frac{\exp(\ux_{i\bg}^{\T}\utheta_{\bg})}{1+\exp(\ux_{i\bg}^{\T}\utheta_{\bg})}\right]^{y_i}\left[\frac{1}{1+\exp(\ux_{i\bg}^{\T}\utheta_{\bg})}\right]^{1-y_i} \times \\
+&& (2\pi\lambda)^{-\frac{k}{2}}\exp\left\{-\frac{1}{2\lambda}\utheta_\bg^{\T}\utheta_\bg\right\},(\#eq:0) 
+\end{eqnarray}
+where $k = |\bg|$ is the model size of $\bg$. Hence, the posterior mode is $\hat\utheta_\bg = \arg\max_{\utheta_\bg}f(\uy|\utheta_\bg,\bg)\pi(\utheta_\bg|\bg)$.
+
+In the R code, we set $n = 300, p = 1000, \lambda =10000$. $\ux_i$ is generated from $\ux_i\overset{i.i.d}{\sim}\mathcal{N}(\0_p,0.2^{|i-j|})$. Consider the true model is $\bg^* = \{1,5,10,15\}$ with model size $k=|\bg^*|=4$, and the true parameters is $\utheta_{\bg^{*}}^* = (1,1.5,2,-1)^{\T}$. So $y_i\overset{i.i.d}{\sim} Ber(p_i)$ with $p_i =  \frac{\exp(\ux_{i\bg^{*}}^{\T}\utheta_{\bg^{*}}^{*})}{1+\exp(\ux_{i\bg^{*}}^{\T}\utheta_{\bg^{*}}^{*})}, i=1,2,\ldots,n$. R code for data generation is as follow. 
+```{r}
+## Model setup
+
+library(mvtnorm)
+n=300 # sample size
+p=1000 # dimension
+lambda = 10000 # hyper-parameter in the prior
+full.model <- 1:p 
+rho = 0.2 # correlation between each pair of adjacent covariates
+# covariance matrix for covariate matrix: X. 
+Sig_x = rho^(abs(matrix(full.model,p,p)-t(matrix(full.model,p,p)))) 
+set.seed(1000) # set random seed
+var.true <- c(1,5,10,15) # true model r^*
+k.true=length(var.true) # size of true model r^*
+Theta = rep(0,p) 
+theta.true <- c(1,1.5,2,-1) # values of true theta_r values
+Theta[var.true] = theta.true
+X = rmvnorm(n,rep(0,p),Sig_x,method="chol") # generate X from multivar-normal distribution
+X[,1]<-rep(1,n) # make first column of X a 1 vector
+eta = X%*%Theta
+pi.true <- 1/(1+exp(-eta)) # prob of y = 1. 
+y = rbinom(n,size = 1,prob = pi.true) # response is from Bernoulli distribution. 
+```
+
+##  Evaluate $\tilde S(\bg)\mathbb{I}\{\bg\in\nbd_+(\hat\bg)\}$ simultaneously
+
+To estimate $\tilde\theta_j$ for $j\notin \bg$, we have the explicit forms of $l(\theta_j)$, $u_j(\theta_j)$ and each diagonal element of $\uJ_\uu$ as follows:
+\begin{eqnarray}
+	l(\theta_j) &=& \sum_{i=1}^{n} \big[y_i\psi_i(\theta_j)- \log(1+\exp(\psi_i(\theta_j)))\big]-\frac{1}{2\lambda}(\hat\utheta_{\bg}^{\T}\hat\utheta_{\bg} + \theta_j^2) - \\
+	&& \frac{k+1}{2}\log(2\pi\lambda), (\#eq:1) \\
+	u_j(\theta_j) &=& \sum_{i=1}^{n}x_{ij}\left(y_i - \frac{1}{1+\exp(-\psi_i(\theta_j))}\right) - \frac{\theta_j}{\lambda},(\#eq:2)\\
+	J_j(\theta_j) &=& \frac{\partial u_j(\theta_j)}{\partial \theta_j} = -\sum_{i=1}^{n} \frac{x_{ij}^2\exp(-\psi_i(\theta_j))}{\left[1+\exp(-\psi_i(\theta_j))\right]^2} - \frac{1}{\lambda},(\#eq:3) 
+\end{eqnarray}
+where $\psi_i(\theta_j) = x_{ij}\theta_j+\ux_{i\bg}^{\T}\hat\utheta_{\bg}$.
+
+In order to estimate $\tilde S(\bg)\mathbb{I}\{\bg\in\nbd_+(\hat\bg)\}$, 
+
+- i) firstly, we need to derive three key functions for each $j\notin\hat\bg$: $l(\theta_j)$ in \@ref(eq:1), $u_j(\theta_j)$ in \@ref(eq:2), and $J_j(\theta_j)$ in \@ref(eq:3);
+- ii)  Secondly, plugging each $u_j(\theta_j)$ and $J_j(\theta_j)$ into \@ref(eq:4) in the Newton-Raphson algorithm, 
+\begin{eqnarray}
+	\utheta^{(t+1)} = \utheta^{(t)} - \uJ_\uu(\utheta^{(t)})^{-1}\uu(\utheta^{(t)}),(\#eq:4) 
+\end{eqnarray}
+we can obtain $\tilde\uTheta_ {\nbd_+(\hat\bg)}$ simultaneously;
+- iii) Finally, applying each element in $\tilde\uTheta_ {\nbd_+(\hat\bg)}$ to \@ref(eq:5), 
+\begin{eqnarray}
+	S(\hat\bg^{+j})&=& (2\pi n^{-1})^{|\hat\bg^{+j}|/2}f(\uy|\hat\utheta_{\hat\bg^{+j}},\hat\bg^{+j})\pi(\hat\utheta_{\hat\bg^{+j}}|\hat\bg^{+j})\pi(\hat\bg^{+j})\nonumber\\
+	&\geq& (2\pi n^{-1})^{\frac{|\hat\bg|+1}{2}}f(\uy|\hat\utheta_{\hat\bg},\tilde\theta_j,\hat\bg^{+j})\pi(\hat\utheta_{\hat\bg},\tilde\theta_j|\hat\bg^{+j})\pi(\hat\bg^{+j})(\#eq:5) \\
+	&\equiv& \tilde S(\hat\bg^{+j}),\nonumber
+\end{eqnarray}
+we obtain $\tilde S(\bg)\mathbb{I}\{\bg\in\nbd_+(\hat\bg)\}$.
+
+In our R demo code, to make the coding easier, instead of iterating \@ref(eq:4), we consider a useful function `multiroot` from the R package `rootSolve` [@KarlinePackage] to solve the system of equations: all $u_j(\theta_j) = 0$. Assuming a full Jacobian matrix ($\uJ_\uu$), `rootSolve` also uses the Newton-Raphson method to estimate solutions to the system of equations. In our case, given a vector of $(p-k)$ parameters $\theta_j$'s, and a set of $(p-k)$ equations regarding these parameters, `multiroot` estimates the root of the equations, i.e. the $\theta_j$ values where all $u_j(\theta_j) = 0$.
+
+To make the code more understable, we list some reference of algebra notations for R code. 
+
+- 1 `log.likelihd.der`. It returns a $(p-k)$-dimension vector for $u_j(\theta_j)$ in \@ref(eq:2). 
+  * 1.1 `psi` is $\uX_{-\bg}\utheta_{-\bg} + \uX_\bg\hat\utheta_\bg\1_{p-k}$, a $n\times (p-k)$ matrix consisting of $\psi_i(\theta_j)$ for all $j\notin\bg$, where
+    * `x.hat.theta` is $\uX_\bg\hat\utheta_\bg\1_{p-k}$, a $n\times (p-k)$ matrix consisting of $(p-k)$ many $\uX_\bg\hat\utheta_\bg$'s: $(\uX_\bg\utheta_\bg,\uX_\bg\utheta_\bg,\ldots,\uX_\bg\utheta_\bg)$, and
+    * `X_r`: $\uX_{-\bg}$ contains predictors not in the current model, a $n\times (p-k)$ matrix consisting of $\tilde\ux_{j}$ for all $j\notin\bg$.
+  - 1.2 `pi_r` is $p_i$ given the current model $\bg$.
+- 2 `log.tilde.S.plus` is $\tilde S(\bg)\mathbb{I}\{\bg\in\nbd_+(\hat\bg)\}$.
+- 3 `neg.log.exact.likelihd` is $-\log\left[f(\uy|\utheta_\bg,\bg)\pi(\utheta_\bg|\bg)\pi(\bg)\right]$ in \@ref(eq:0).
+
+The following R code defines the functions of negative \@ref(eq:0), \@ref(eq:2) and \@ref(eq:5).
+```{r}
+# Functions
+gamma_y1 <- which(y==1) # position of y=1
+gamma_y0 <- (1:n)[-gamma_y1] # position of y=0
+# log.likelihd.der is the first derivative of log-likelihood function of
+# l(theta_j): u_j(theta_j) in Eq.(1.3). The input "theta" is vectorized.
+# psi is a vector consisting of psi_i(theta_j)'s for all j's. 
+log.likelihd.der <- function(theta) {
+  psi <- x.hat.theta + X_r * rep(theta, rep(n,hat.G0.t.len))
+  pi_r <- 1/(1+exp(-psi)) 
+  f <- colSums(X_r[gamma_y1,]*(1-pi_r[gamma_y1,])) - 
+    colSums(X_r[gamma_y0,]*pi_r[gamma_y0,]) - theta/lambda
+  return(f)
+}
+# log of approximate marginal posterior likelihood function 
+# for nbd+:log(\tilde S(r)) in Eq.(1.6)
+log.tilde.S.plus <- function(theta) {
+  psi <- x.hat.theta + X_r * rep(theta, rep(n,hat.G0.t.len))
+  f = colSums(psi[gamma_y1,])- colSums(log(1+exp(psi))) - 
+    0.5/lambda*(rep(crossprod(hat.theta.t),p-k) + theta^2) - (k+1)/2*log(n*lambda) 
+  - lchoose(p, k+1)
+  return(f)
+}
+# log of exact marginal posterior likelihood function: -Eq.(1.1)
+neg.log.exact.likelihd <- function(theta) {
+  X.r = x0
+  len.theta <- length(theta)
+  XTheta.r <- X.r%*%as.matrix(theta) # n times 1 vector
+  f = sum(y*XTheta.r - log(1+exp(XTheta.r)))- len.theta/2*log(2*pi*lambda) - 
+    crossprod(theta)/(2*lambda) -  lchoose(p, len.theta)
+  return(-f)
+}
+```
+Given the current model $\bg = \{1,5,10\}$, we compute $\tilde S(\bg)\mathbb{I}\{\bg\in\nbd_+(\hat\bg)\}$ and $\tilde S(\bg)\mathbb{I}\{\bg\in\nbd_-(\hat\bg)\}$ simultaneously.
+
+```{r}
+library(rootSolve) # for multiroot function
+library(ggplot2)
+library(ggpubr)
+# Assume the current model is the (1,5,10)
+hat.G1 <- c(1,5,10) # first predictor
+hat.G1.t <- hat.G1
+hat.G0.t <- full.model[-hat.G1.t] # comlement set of the current model.
+X.r <- X[, hat.G1.t] # predictors in the current model
+X_r <- X[, hat.G0.t] # predictors not in the current model.
+k = length(hat.G1.t) # num of predictors in current model
+x0 <- X.r
+# estimate posterior model \hat\theta_r for current model
+likelihd.optim <- optim(par = rep(0,length(hat.G1.t)), fn = neg.log.exact.likelihd, 
+                        method = 'BFGS')
+log.S <- -likelihd.optim$value 
+hat.theta.t <- likelihd.optim$par
+## 2.ii)
+# Define nbd+(r): addition neighbor
+add.nei <- lapply(hat.G0.t, FUN = function(x) sort(c(hat.G1.t, x)))
+### Define nbd-(r): deletion neighbor
+if (k>1) {
+  del.nei <- lapply(2:k, FUN = function(x) hat.G1.t[-x]) # reserve first predictor always
+} else {
+  del.nei <- NULL # if k=1, there is no deletion neighbor. 
+}
+## 2.iii) & iv)
+### \tilde s(r) in nbd_+(r): addition neighbor
+hat.G0.t.len <- length(hat.G0.t) # num of elements in complement set of current model
+x.hat.theta <- matrix(X.r%*%as.matrix(hat.theta.t),n,hat.G0.t.len)
+# solutions to system of equations.
+tilde.theta.plus <- multiroot(f = log.likelihd.der, start = rep(0,hat.G0.t.len),
+                             jactype = 'bandint', bandup = 0, banddown = 0)$root
+appro.post.plus <- log.tilde.S.plus(tilde.theta.plus) # Eq.(1.6)
+### \tilde s(r) in nbd-(r): deletion neighbor of current model.
+if (k>1) {
+  appro.post.minus <- rep(NA,k-1)
+  for (j in 2:k) {# begins from 2 to avoid removal of the intercept
+    x0 = X[,hat.G1.t[-j]] 
+    appro.post.minus[j-1] <- -neg.log.exact.likelihd(hat.theta.t[-j])
+  }
+} else appro.post.minus = NULL # if k=1, no deletion neighbor. 
+appro.post.plus.data.frame = data.frame(S.plus = appro.post.plus,x = 1:(p-k))
+appro.post.minus.data.frame = data.frame(S.minus = appro.post.minus,x = 1:(k-1))
+p.plus <- ggplot(appro.post.plus.data.frame,  aes(x,S.plus)) + geom_point() + 
+  xlab("") + ylab("log.tilde.S.plus") + ggtitle("addtion neighbor")
+p.minus <- ggplot(appro.post.minus.data.frame,  aes(x,S.minus)) + geom_point() +
+  scale_x_continuous(breaks = seq(1, k, by = 1)) + 
+  xlab("") + ylab("log.tilde.S.minus") + ggtitle("deletion neighbor")
+ggarrange(p.plus, p.minus, widths = c(3,2))
+# return the best model in the nbd_+(r) nbd_-(r)
+hat.r.plus <- add.nei[[which.max(appro.post.plus)]] 
+hat.r.minus <- del.nei[[which.max(appro.post.minus)]] 
+hat.r.plus
+hat.r.minus
+```
+Thus, $\hat\bg^+=$(`r hat.r.plus`) and $\hat\bg^-=$(`r hat.r.minus`). Recall that the ture model $\bg^*=\{1,5,10,15\}$. Given the current model $\bg=\{1,5,10\}$, the next update is $\hat\bg^+=$(`r hat.r.plus`) in addition neighbor, and $\hat\bg^-=$(`r hat.r.minus`) in deletion neighbor. 
+
+## Time cost comparison for proposed method and for loop method
+
+In this part, we compare time cost of $\tilde S(\bg)\mathbb{I}\{\bg\in\nbd_+(\hat\bg)\}$ estimated by proposed method with $S(\bg)\mathbb{I}\{\bg\in\nbd_+(\hat\bg)\}$ using "for-loop".
+```{r,eval= F}
+library(microbenchmark)
+LOG.exact.likelihd <- rep(NA,length(add.nei))
+j = 1
+timecost <- microbenchmark("for_loop" = {
+  for (model in add.nei) {
+    x0 <- X[,model]
+    # compute posterior mode
+    likelihd.optim <- optim(par = rep(0,length(model)), fn = neg.log.exact.likelihd, 
+                            method = 'BFGS')
+    LOG.exact.likelihd[j] <- - likelihd.optim$value
+    j = j + 1
+  }
+},
+"Proposed" = {
+  tilde.theta.plus <- multiroot(f = log.likelihd.der, start = rep(0,hat.G0.t.len),
+                                jactype = 'bandint', bandup = 0, banddown = 0)$root
+}
+) 
+timecost
+```
+
+
+```{r, echo = F}
+load("timecost-Pro3.RData")
+timecost
+```
+In terms of median, the proposed method is about 20 times faster than the "for-loop". 

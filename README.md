@@ -1,1 +1,1 @@
-This is a minimal example of a book based on R Markdown and **bookdown** (https://github.com/rstudio/bookdown). Please see the page "Get Started" at https://bookdown.org/home/about/ for how to compile this example.
+This website shows you the R demo code for my dissertation: Bayesian solutions to high-dimensional data challenges using hybrid search. 
